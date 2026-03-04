@@ -169,20 +169,15 @@ def send_pepe_wish_sequence(chat_id):
             bot.send_message(chat_id, "✨ " + wish_text)
             return
         
-        # 2. Отправляем гифку
+        # 2. Отправляем гифку (просто байты, без InputFile)
         print(f"  ⏳ Отправляем гифку в Telegram...")
-        
-        # Создаем InputFile с правильным MIME-типом
-        from telebot.types import InputFile
-        gif_file = InputFile(gif_data, file_name=gif_name)
         
         gif_message = bot.send_animation(
             chat_id,
-            gif_file,
+            gif_data,
             caption="🎲 Кручу кубик... (12 секунд)"
         )
         print(f"  ✅ Гифка отправлена, message_id: {gif_message.message_id}")
-        print(f"  📦 Тип сообщения: {type(gif_message)}")
         
         # 3. Через 12 секунд отправляем пожелание
         def send_wish_later():
@@ -247,8 +242,8 @@ def inline_handler(inline_query):
     print(f"⏰ Время: {datetime.now().strftime('%H:%M:%S')}")
     
     results = []
+    hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN", "localhost")
     
-    # Всегда возвращаем результат
     if query_text == "":
         print(f"  ✅ Пустой запрос - показываем гифку")
         
@@ -266,7 +261,6 @@ def inline_handler(inline_query):
             gif_id = generate_unique_id()
             temp_images[gif_id] = (gif_data, time.time())
             
-            hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN", "localhost")
             gif_url = f"https://{hostname}/image/{gif_id}"
             print(f"  🔗 URL гифки: {gif_url}")
             
@@ -281,12 +275,12 @@ def inline_handler(inline_query):
             results.append(result)
             print(f"  ✅ InlineQueryResultGif создан, id: {gif_id}")
             
-            # Отправляем пожелание через 12 сек в ЭТОТ ЖЕ ЧАТ
-            def send_wish_to_chat():
-                print(f"  ⏰ Прошло 12 секунд, отправляем пожелание в чат...")
+            # В инлайн-режиме нельзя отправить второе сообщение в тот же чат,
+            # поэтому отправляем в личку
+            def send_wish_to_user():
+                print(f"  ⏰ Прошло 12 секунд, отправляем пожелание в личку...")
                 time.sleep(12)
                 try:
-                    # Создаем картинку
                     image_data = create_wish_image(wish_text)
                     
                     if image_data:
@@ -294,21 +288,18 @@ def inline_handler(inline_query):
                         temp_images[image_id] = (image_data.getvalue(), time.time())
                         image_url = f"https://{hostname}/image/{image_id}"
                         
-                        # Важно: нужно получить chat_id из inline-запроса
-                        # Но у нас его нет, поэтому отправляем в тот же чат через answer
-                        # Временно отправляем в личку для теста
-                        print(f"  ⚠️ Отправляем пожелание в личку {user_id} (для теста)")
+                        print(f"  ✅ Отправляю пожелание в личку {user_id}")
                         bot.send_photo(
                             user_id,
                             image_url,
                             caption=wish_text
                         )
-                        print(f"  ✅ Пожелание отправлено")
+                        print(f"  ✅ Пожелание отправлено в личку")
                 except Exception as e:
                     print(f"  ❌ Ошибка: {e}")
                     traceback.print_exc()
             
-            threading.Thread(target=send_wish_to_chat, daemon=True).start()
+            threading.Thread(target=send_wish_to_user, daemon=True).start()
             print(f"  ⏰ Таймер на 12 секунд запущен")
             
         else:
