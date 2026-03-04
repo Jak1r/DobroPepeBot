@@ -82,19 +82,29 @@ def get_random_gif_from_local():
             return None, None
             
         gif_files = [f for f in os.listdir(gifs_folder) if f.endswith('.gif')]
+        print(f"  📁 Найдено .gif файлов: {len(gif_files)}")
         
         if not gif_files:
             return None, None
             
         selected = random.choice(gif_files)
         gif_path = os.path.join(gifs_folder, selected)
+        print(f"  🎲 Выбрана: {selected}")
         
         with open(gif_path, 'rb') as f:
             gif_data = f.read()
-            
+        
+        # Проверяем сигнатуру
+        if gif_data.startswith(b'GIF87a') or gif_data.startswith(b'GIF89a'):
+            print(f"  ✅ Это GIF (сигнатура верна)")
+        else:
+            print(f"  ⚠️ Странная сигнатура: {gif_data[:10]}")
+        
         return gif_data, selected
+        
     except Exception as e:
         print(f"  ❌ Ошибка: {e}")
+        traceback.print_exc()
         return None, None
 
 # ========== ФУНКЦИИ ДЛЯ ЛИЧНЫХ СООБЩЕНИЙ ==========
@@ -136,40 +146,64 @@ def handle_about_button(message):
 
 # ========== ЛИЧКА: ГИФКА → ЧЕРЕЗ 12 СЕК РЕДАКТИРУЕТСЯ ==========
 def send_pepe_wish_sequence(chat_id):
+    """Отправляет гифку с кубиком, затем картинку с пожеланием"""
     try:
+        print(f"\n🎬 send_pepe_wish_sequence для {chat_id}")
+        
+        # Получаем случайную гифку
         gif_data, gif_name = get_random_gif_from_local()
         
         if not gif_data:
+            print(f"  ❌ Нет гифок, отправляю только пожелание")
             bot.send_message(chat_id, "✨ " + get_random_wish())
             return
         
+        print(f"  ✅ Гифка получена: {gif_name}, размер: {len(gif_data)} байт")
+        print(f"  🔍 Первые байты: {gif_data[:10]}")
+        
         # Проверяем, что это действительно GIF
-        if gif_data.startswith(b'GIF87a') or gif_data.startswith(b'GIF89a'):
-            print(f"  ✅ Это GIF, отправляю анимацию")
-            
-            # Отправляем гифку
+        if not (gif_data.startswith(b'GIF87a') or gif_data.startswith(b'GIF89a')):
+            print(f"  ❌ Файл не является GIF!")
+            bot.send_message(chat_id, "✨ " + get_random_wish())
+            return
+        
+        # Сохраняем гифку во временное хранилище для создания URL
+        gif_id = generate_unique_id("gif")
+        temp_images[gif_id] = (gif_data, time.time())
+        hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN", "localhost")
+        gif_url = f"https://{hostname}/image/{gif_id}"
+        
+        print(f"  🔗 GIF URL: {gif_url}")
+        
+        # Отправляем гифку через URL (этот метод работает надежнее)
+        try:
+            gif_message = bot.send_animation(
+                chat_id,
+                gif_url,
+                caption="🎲 Кручу кубик... (12 секунд)"
+            )
+            print(f"  ✅ Гифка отправлена через URL, ID: {gif_message.message_id}")
+        except Exception as e:
+            print(f"  ⚠️ Не удалось отправить через URL, пробую через bytes: {e}")
+            # Если не получилось через URL, пробуем через bytes
             gif_message = bot.send_animation(
                 chat_id,
                 gif_data,
                 caption="🎲 Кручу кубик... (12 секунд)"
             )
-            print(f"  ✅ Гифка отправлена, ID: {gif_message.message_id}")
-        else:
-            print(f"  ❌ Файл не является GIF")
-            bot.send_message(chat_id, "✨ " + get_random_wish())
-            return
+            print(f"  ✅ Гифка отправлена через bytes, ID: {gif_message.message_id}")
         
         def send_wish_later():
             time.sleep(12)
             try:
                 wish_text = get_random_wish()
+                print(f"  ✨ Пожелание: {wish_text[:30]}...")
+                
                 image_data = create_wish_image(wish_text)
                 
                 if image_data:
                     image_id = generate_unique_id("wish")
                     temp_images[image_id] = (image_data.getvalue(), time.time())
-                    
-                    hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN", "localhost")
                     image_url = f"https://{hostname}/image/{image_id}"
                     
                     # Пытаемся отредактировать сообщение
@@ -182,29 +216,31 @@ def send_pepe_wish_sequence(chat_id):
                                 caption=wish_text
                             )
                         )
-                        print(f"  ✅ Сообщение отредактировано")
+                        print(f"  ✅ Сообщение отредактировано на фото")
                     except Exception as e:
-                        print(f"⚠️ Не удалось отредактировать: {e}")
+                        print(f"  ⚠️ Не удалось отредактировать: {e}")
                         # Отправляем новым сообщением
                         bot.send_photo(
                             chat_id,
                             image_url,
                             caption=wish_text
                         )
+                        print(f"  ✅ Отправлено новое сообщение с фото")
                 else:
-                    # Если картинка не создалась, отправляем текст
+                    print(f"  ❌ Не удалось создать картинку")
                     bot.edit_message_text(
                         chat_id=chat_id,
                         message_id=gif_message.message_id,
                         text=f"✨ {wish_text}"
                     )
             except Exception as e:
-                print(f"❌ Ошибка: {e}")
+                print(f"❌ Ошибка в send_wish_later: {e}")
+                traceback.print_exc()
         
         threading.Thread(target=send_wish_later, daemon=True).start()
         
     except Exception as e:
-        print(f"❌ Ошибка: {e}")
+        print(f"❌ Ошибка в send_pepe_wish_sequence: {e}")
         traceback.print_exc()
         bot.send_message(chat_id, "✨ " + get_random_wish())
 
