@@ -1,20 +1,27 @@
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import random
 import os
 from io import BytesIO
-import traceback
+import requests
+
+print("🔍 ПРОВЕРКА ШРИФТОВ:")
+fonts_dir = "assets/fonts"
+if os.path.exists(fonts_dir):
+    fonts = os.listdir(fonts_dir)
+    print(f"✅ Найдено шрифтов: {len(fonts)}")
+    for f in fonts:
+        print(f"   - {f}")
+else:
+    print(f"❌ Папка {fonts_dir} не найдена!")
 
 # Пути к ресурсам
 FONTS_DIR = 'assets/fonts'
 BACKGROUNDS_DIR = 'assets/backgrounds'
 
-# Список доступных шрифтов
+# Список доступных шрифтов (будем пробовать по порядку)
 FONT_PATHS = [
-    os.path.join(FONTS_DIR, 'Montserrat-VariableFont_wght.ttf'),
-    os.path.join(FONTS_DIR, 'Nunito-VariableFont_wght.ttf'),
-    os.path.join(FONTS_DIR, 'Jost-VariableFont_wght.ttf'),
-    os.path.join(FONTS_DIR, 'RussoOne-Regular.ttf'),
-    os.path.join(FONTS_DIR, 'Charis-Bold.ttf'),
+    os.path.join(FONTS_DIR, 'Impact.ttf'),
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',  # системный Linux
 ]
 
 def get_random_background():
@@ -28,6 +35,7 @@ def get_random_background():
     except Exception as e:
         print(f"⚠️ Ошибка при выборе фона: {e}")
     
+    # Если нет фонов, создаем градиентный фон
     return None
 
 def create_gradient_background(width, height):
@@ -35,6 +43,7 @@ def create_gradient_background(width, height):
     img = Image.new('RGB', (width, height), color='white')
     draw = ImageDraw.Draw(img)
     
+    # Рисуем градиент от светлого к темному
     for i in range(height):
         color_value = int(200 + (55 * i / height))
         draw.line([(0, i), (width, i)], fill=(color_value, color_value, color_value))
@@ -42,7 +51,7 @@ def create_gradient_background(width, height):
     return img
 
 def get_font(size):
-    """Пытается загрузить шрифт, поддерживающий эмодзи"""
+    """Пытается загрузить шрифт, если не получается - использует дефолтный"""
     for font_path in FONT_PATHS:
         try:
             if os.path.exists(font_path):
@@ -51,9 +60,8 @@ def get_font(size):
                 test_text = "✨"
                 bbox = font.getbbox(test_text)
                 if bbox[2] - bbox[0] > 0:  # если ширина > 0, значит шрифт работает
-                    print(f"✅ Выбран шрифт: {os.path.basename(font_path)}")
                     return font
-        except Exception as e:
+        except:
             continue
     
     print("⚠️ Не удалось загрузить шрифт с эмодзи, использую дефолтный")
@@ -125,7 +133,7 @@ def create_wish_image(text):
         total_text_height = len(lines) * line_height
         start_y = (height - total_text_height) // 2
         
-        # Тень для текста
+        # Тень для текста (для лучшей читаемости)
         shadow_offset = 4
         for i, line in enumerate(lines):
             bbox = draw.textbbox((0, 0), line, font=font)
@@ -155,5 +163,4 @@ def create_wish_image(text):
         
     except Exception as e:
         print(f"❌ Ошибка создания изображения: {e}")
-        traceback.print_exc()
         return None
