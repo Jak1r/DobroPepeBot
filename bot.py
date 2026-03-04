@@ -185,31 +185,33 @@ def inline_handler(inline_query):
     
     print(f"📨 Inline запрос от {user_id}: '{query_text}'")
     
+    results = []
+    
     if query_text == "":
-        # Для инлайн отправляем гифку
+        # Берём гифку и пожелание
         wish_text = get_random_wish()
         gif_data, gif_name = get_random_gif()
         
         if gif_data:
-            # Сохраняем гифку во временное хранилище
+            # Сохраняем гифку
             gif_id = generate_unique_id()
             temp_images[gif_id] = (gif_data, time.time())
             
             hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN", "localhost")
             gif_url = f"https://{hostname}/image/{gif_id}"
             
-            # Убираем description, оставляем только поддерживаемые параметры
+            # Создаём результат с гифкой (БЕЗ description)
             result = telebot.types.InlineQueryResultGif(
                 id=gif_id,
                 gif_url=gif_url,
                 thumbnail_url=gif_url,
-                title="🎲 DobroPepe",
+                title="🎲 Получить пожелание",
                 caption="🎲 Кручу кубик... (12 секунд)"
             )
+            results.append(result)
+            print(f"✅ Добавлена гифка: {gif_name}")
             
-            results = [result]
-            
-            # Запускаем отправку пожелания через 12 секунд
+            # Отправляем пожелание через 12 сек
             def send_wish_later():
                 time.sleep(12)
                 try:
@@ -219,7 +221,6 @@ def inline_handler(inline_query):
                         temp_images[image_id] = (image_data.getvalue(), time.time())
                         image_url = f"https://{hostname}/image/{image_id}"
                         
-                        # Отправляем пожелание в личку пользователю
                         bot.send_photo(
                             user_id,
                             image_url,
@@ -227,17 +228,15 @@ def inline_handler(inline_query):
                         )
                         print(f"✅ Пожелание отправлено в личку {user_id}")
                 except Exception as e:
-                    print(f"❌ Ошибка при отправке пожелания: {e}")
+                    print(f"❌ Ошибка: {e}")
             
             threading.Thread(target=send_wish_later, daemon=True).start()
-            
         else:
-            # Если нет гифки - показываем фото
+            # Если нет гифки — показываем фото
             image_data = create_wish_image(wish_text)
             if image_data:
                 image_id = generate_unique_id()
                 temp_images[image_id] = (image_data.getvalue(), time.time())
-                hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN", "localhost")
                 image_url = f"https://{hostname}/image/{image_id}"
                 
                 result = telebot.types.InlineQueryResultPhoto(
@@ -248,7 +247,7 @@ def inline_handler(inline_query):
                     description=wish_text[:50] + "...",
                     caption=wish_text
                 )
-                results = [result]
+                results.append(result)
             else:
                 result = InlineQueryResultArticle(
                     id=generate_unique_id(),
@@ -258,24 +257,36 @@ def inline_handler(inline_query):
                         message_text=f"✨ {wish_text}"
                     )
                 )
-                results = [result]
-        
-        try:
-            bot.answer_inline_query(inline_query.id, results, cache_time=0, is_personal=True)
-            print(f"✅ Инлайн результат отправлен")
-        except Exception as e:
-            print(f"❌ Ошибка inline: {e}")
+                results.append(result)
     else:
-        help_text = "❓ Просто отправь пустой запрос через @DobroPepeBot"
+        # Непустой запрос — показываем инструкцию
         result = InlineQueryResultArticle(
             id=generate_unique_id(),
             title="❓ Как пользоваться",
             description="Отправь пустой запрос",
             input_message_content=InputTextMessageContent(
-                message_text=help_text
+                message_text="❓ Просто отправь пустой запрос через @DobroPepeBot"
             )
         )
-        bot.answer_inline_query(inline_query.id, [result], cache_time=0)
+        results.append(result)
+    
+    try:
+        if results:
+            bot.answer_inline_query(inline_query.id, results, cache_time=0, is_personal=True)
+            print(f"✅ Отправлено {len(results)} результатов")
+        else:
+            # Если нет результатов — показываем заглушку
+            result = InlineQueryResultArticle(
+                id=generate_unique_id(),
+                title="⚠️ Временно недоступно",
+                description="Попробуйте позже",
+                input_message_content=InputTextMessageContent(
+                    message_text="😢 Что-то пошло не так. Попробуйте позже."
+                )
+            )
+            bot.answer_inline_query(inline_query.id, [result], cache_time=0)
+    except Exception as e:
+        print(f"❌ Ошибка ответа на inline: {e}")
 
 # ========== ЭНДПОИНТ ДЛЯ ФАЙЛОВ ==========
 @app.route('/image/<image_id>', methods=['GET'])

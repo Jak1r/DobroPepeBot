@@ -55,11 +55,16 @@ def get_font(size):
     for font_path in FONT_PATHS:
         try:
             if os.path.exists(font_path):
-                return ImageFont.truetype(font_path, size)
+                font = ImageFont.truetype(font_path, size)
+                # Проверяем, может ли шрифт отобразить эмодзи
+                test_text = "✨"
+                bbox = font.getbbox(test_text)
+                if bbox[2] - bbox[0] > 0:  # если ширина > 0, значит шрифт работает
+                    return font
         except:
             continue
     
-    # Если ничего не нашлось
+    print("⚠️ Не удалось загрузить шрифт с эмодзи, использую дефолтный")
     return ImageFont.load_default()
 
 def wrap_text(text, font, max_width, draw):
