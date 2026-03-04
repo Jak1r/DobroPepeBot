@@ -136,70 +136,54 @@ def wrap_text(text, font, max_width, draw):
     
     return lines
 
-def add_soft_glow(draw, text, font, x, y, color=(255, 255, 255)):
-    """Добавляет мягкое свечение вокруг текста"""
-    glow_steps = [3, 5, 7]  # радиусы свечения
-    glow_opacity = [100, 60, 30]  # прозрачность для каждого радиуса
-    
-    for radius, opacity in zip(glow_steps, glow_opacity):
-        for dx in range(-radius, radius + 1):
-            for dy in range(-radius, radius + 1):
-                if dx*dx + dy*dy <= radius*radius:
-                    glow_color = (*color, opacity)
-                    draw.text((x + dx, y + dy), text, font=font, fill=glow_color)
-
-def draw_text_with_emoji_and_outline(draw, text, font, emoji_png, x, y, outline=True, glow=False):
+def draw_text_with_sparkles(draw, text, font, emoji_png, x, y):
     """
-    Рисует текст по центру с обводкой и эмодзи.
-    outline=True - добавляет черную обводку [citation:2][citation:5]
-    glow=False - добавляет мягкое свечение (опционально)
+    Рисует текст по центру с обводкой и автоматически добавляет блёстки по бокам.
     """
-    current_x = x
+    # Размер эмодзи
+    emoji_height = int(font.size * 1.2)
+    emoji_width = emoji_height
+    emoji_y = y - 8
     
-    # Разбиваем текст по ✨
-    parts = text.split('✨')
+    # Ресайзим PNG для левой и правой блёстки
+    if emoji_png:
+        emoji_left = emoji_png.resize((emoji_width, emoji_height), Image.Resampling.LANCZOS)
+        emoji_right = emoji_png.resize((emoji_width, emoji_height), Image.Resampling.LANCZOS)
     
-    for i, part in enumerate(parts):
-        # Рисуем обычный текст
-        if part:
-            # Сначала обводка (если нужно)
-            if outline:
-                outline_size = 3
-                for dx in range(-outline_size, outline_size + 1):
-                    for dy in range(-outline_size, outline_size + 1):
-                        if dx != 0 or dy != 0:  # пропускаем центр
-                            draw.text((current_x + dx, y + dy), part, font=font, fill='black')
-            
-            # Потом свечение (если нужно)
-            if glow:
-                add_soft_glow(draw, part, font, current_x, y)
-            
-            # Основной текст
-            draw.text((current_x, y), part, font=font, fill=(255, 255, 255))
-            
-            bbox = draw.textbbox((0, 0), part, font=font)
-            current_x += bbox[2] - bbox[0]
-        
-        # Вставляем эмодзи
-        if i < len(parts) - 1:
-            if emoji_png:
-                # Рассчитываем размер эмодзи
-                emoji_height = int(font.size * 1.3)
-                emoji_width = emoji_height
-                
-                # Ресайзим PNG
-                emoji_resized = emoji_png.resize((emoji_width, emoji_height), Image.Resampling.LANCZOS)
-                
-                # Вставляем PNG на картинку (немного смещаем по вертикали)
-                emoji_y = y - 8
-                bg.paste(emoji_resized, (int(current_x), int(emoji_y)), emoji_resized)
-                
-                current_x += emoji_width + 8
-            else:
-                # Если нет PNG, рисуем *
-                draw.text((current_x, y), '*', font=font, fill=(255, 255, 255))
-                bbox = draw.textbbox((0, 0), '*', font=font)
-                current_x += bbox[2] - bbox[0]
+    # Измеряем ширину текста
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+    
+    # Общая ширина: левая блёстка + текст + правая блёстка + отступы
+    sparkle_gap = 15  # отступ между блёсткой и текстом
+    total_width = text_width
+    
+    if emoji_png:
+        total_width += (emoji_width + sparkle_gap) * 2
+    
+    # Вычисляем x для центрирования всей композиции
+    start_x = x + (1080 - x*2 - total_width) // 2
+    
+    current_x = start_x
+    
+    # Рисуем левую блёстку
+    if emoji_png:
+        bg.paste(emoji_left, (int(current_x), int(emoji_y)), emoji_left)
+        current_x += emoji_width + sparkle_gap
+    
+    # Рисуем текст с обводкой
+    outline_size = 3
+    for dx in range(-outline_size, outline_size + 1):
+        for dy in range(-outline_size, outline_size + 1):
+            if dx != 0 or dy != 0:
+                draw.text((current_x + dx, y + dy), text, font=font, fill='black')
+    
+    draw.text((current_x, y), text, font=font, fill=(255, 255, 255))
+    current_x += text_width + sparkle_gap
+    
+    # Рисуем правую блёстку
+    if emoji_png:
+        bg.paste(emoji_right, (int(current_x), int(emoji_y)), emoji_right)
     
     return current_x
 
@@ -227,11 +211,11 @@ def create_wish_image(text):
             bg = create_gradient_background(width, height)
             print(f"  ✅ Создан градиентный фон")
         
-        # 2. Затемняем фон (чуть сильнее для контраста с обводкой)
-        overlay = Image.new('RGBA', (width, height), (0, 0, 0, 80))
+        # 2. Затемняем фон
+        overlay = Image.new('RGBA', (width, height), (0, 0, 0, 70))
         bg.paste(overlay, (0, 0), overlay)
         
-        # 3. Загружаем PNG эмодзи если есть
+        # 3. Загружаем PNG эмодзи
         emoji_png = None
         if os.path.exists(SPARKLES_PNG):
             try:
@@ -247,9 +231,9 @@ def create_wish_image(text):
         font_size = 80
         font = get_random_bold_font(font_size)
         
-        # Отступы от краев
-        margin = 100
-        max_width = width - (margin * 2)
+        # Отступы от краев (учитываем, что блёстки будут по бокам)
+        margin = 150  # увеличили отступ для блёсток
+        max_width = width - (margin * 2) - (150 * 2)  # резервируем место для блёсток
         
         # Разбиваем текст на строки
         lines = wrap_text(text, font, max_width, draw)
@@ -263,41 +247,23 @@ def create_wish_image(text):
             lines = wrap_text(text, font, max_width, draw)
             print(f"  📊 Строк стало: {len(lines)}")
         
-        # 5. Рисуем текст построчно по центру
+        # 5. Рисуем текст построчно с блёстками по бокам
         line_height = font_size + 15
         total_text_height = len(lines) * line_height
         start_y = (height - total_text_height) // 2
         
         for i, line in enumerate(lines):
             y = start_y + (i * line_height)
-            
-            # Рассчитываем ширину строки для центрирования
-            temp_x = margin
-            parts = line.split('✨')
-            line_width = 0
-            
-            for j, part in enumerate(parts):
-                if part:
-                    bbox = draw.textbbox((0, 0), part, font=font)
-                    line_width += bbox[2] - bbox[0]
-                if j < len(parts) - 1:
-                    line_width += font_size + 8  # ширина эмодзи + отступ
-            
-            # Вычисляем x для центрирования
-            x = (width - line_width) // 2
-            
-            # Рисуем строку по центру с обводкой (без свечения для чистоты)
-            draw_text_with_emoji_and_outline(draw, line, font, emoji_png, x, y, outline=True, glow=False)
+            draw_text_with_sparkles(draw, line, font, emoji_png, margin, y)
         
-        # 6. Добавляем декоративную рамку (опционально)
-        frame_color = (255, 255, 255, 40)
-        frame_width = 4
+        # 6. Добавляем декоративную рамку
+        frame_color = (255, 255, 255, 30)
+        frame_width = 3
         
-        # Внешняя рамка
         for i in range(frame_width):
             draw.rectangle(
                 [i, i, width - 1 - i, height - 1 - i],
-                outline=(*frame_color[:3], frame_color[3] - i*10)
+                outline=(*frame_color[:3], frame_color[3] - i*5)
             )
         
         # 7. Сохраняем
@@ -317,7 +283,7 @@ def create_wish_image(text):
 # Для теста
 if __name__ == "__main__":
     print("\n🎲 ТЕСТ ГЕНЕРАЦИИ:")
-    test_wish = "✨ Ты справишься со всем, что встретится на пути ✨"
+    test_wish = "Ты справишься со всем, что встретится на пути"
     img = create_wish_image(test_wish)
     if img:
         print("✅ Тест успешен!")
