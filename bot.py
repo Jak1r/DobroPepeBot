@@ -25,6 +25,16 @@ if not TELEGRAM_TOKEN:
 print("🚀 Запуск DobroPepeBot...")
 print("🎲 Бот с добрыми пожеланиями")
 
+# Проверяем шрифты при старте
+fonts_dir = "assets/fonts"
+if os.path.exists(fonts_dir):
+    fonts = os.listdir(fonts_dir)
+    print(f"📁 Найдено шрифтов: {len(fonts)}")
+    for f in fonts:
+        print(f"   - {f}")
+else:
+    print(f"❌ Папка {fonts_dir} не найдена!")
+
 bot = telebot.TeleBot(TELEGRAM_TOKEN, threaded=False)
 app = Flask(__name__)
 
@@ -48,6 +58,22 @@ threading.Thread(target=cleanup_temp_images, daemon=True).start()
 def generate_unique_id():
     """Генерирует уникальный ID для временных файлов"""
     return f"img_{int(time.time()*1000)}_{random.randint(1000,9999)}"
+
+def get_random_gif():
+    """Возвращает случайную гифку из папки assets/gifs/"""
+    gifs_folder = "assets/gifs"
+    try:
+        gif_files = [f for f in os.listdir(gifs_folder) if f.endswith('.gif')]
+        if gif_files:
+            selected = random.choice(gif_files)
+            gif_path = os.path.join(gifs_folder, selected)
+            with open(gif_path, 'rb') as f:
+                gif_data = f.read()
+            print(f"🎬 Выбрана гифка: {selected}, размер: {len(gif_data)/1024:.1f} КБ")
+            return gif_data, selected
+    except Exception as e:
+        print(f"❌ Ошибка при выборе гифки: {e}")
+    return None, None
 
 # ========== ФУНКЦИИ ДЛЯ ЛИЧНЫХ СООБЩЕНИЙ ==========
 def create_main_keyboard():
@@ -83,7 +109,7 @@ def send_welcome(message):
 @bot.message_handler(func=lambda message: message.text == "🎲 Получить пожелание")
 def handle_wish_button(message):
     """Обработчик кнопки получения пожелания"""
-    send_pepe_wish(message.chat.id)
+    send_pepe_wish_sequence(message.chat.id)
 
 @bot.message_handler(func=lambda message: message.text == "📖 О боте")
 def handle_about_button(message):
@@ -98,88 +124,57 @@ def handle_about_button(message):
     )
     bot.send_message(message.chat.id, about_text, parse_mode='Markdown')
 
-# ========== ЛОГИКА ОТПРАВКИ ПОЖЕЛАНИЯ ==========
-def send_pepe_wish(chat_id):
-    """Отправляет гифку с кубиком, затем картинку с пожеланием"""
+# ========== ОСНОВНАЯ ЛОГИКА ==========
+def send_pepe_wish_sequence(chat_id):
+    """Отправляет гифку, а через 12 секунд - пожелание"""
     try:
-        # 1. Выбираем случайную гифку из папки assets/gifs/
-        gifs_folder = "assets/gifs"
-        gif_files = [f for f in os.listdir(gifs_folder) if f.endswith('.gif')]
+        # 1. Отправляем гифку
+        gif_data, gif_name = get_random_gif()
         
-        if gif_files:
-            selected_gif = random.choice(gif_files)
-            gif_path = os.path.join(gifs_folder, selected_gif)
-            
-            with open(gif_path, 'rb') as f:
-                gif_data = f.read()
-                print(f"🎬 Отправляю гифку: {selected_gif}, размер: {len(gif_data)/1024:.1f} КБ")
-            
-            # Отправляем гифку
-            sent_message = bot.send_animation(
+        if gif_data:
+            gif_message = bot.send_animation(
                 chat_id,
                 gif_data,
                 caption="🎲 Кручу кубик... (12 секунд)"
             )
         else:
-            sent_message = bot.send_message(
+            gif_message = bot.send_message(
                 chat_id,
                 "🎲 Кручу кубик... (12 секунд)"
             )
         
-        # 2. Через 12 секунд генерируем и отправляем картинку с пожеланием
-        def edit_to_wish():
-            time.sleep(12)  # ← ИЗМЕНЕНО: теперь 12 секунд
+        # 2. Через 12 секунд отправляем пожелание отдельным сообщением
+        def send_wish_later():
+            time.sleep(12)
             try:
-                # Получаем случайное пожелание
                 wish_text = get_random_wish()
                 print(f"✨ Генерирую пожелание: {wish_text[:30]}...")
                 
-                # Создаем картинку с пожеланием
                 image_data = create_wish_image(wish_text)
                 
                 if image_data:
-                    # Сохраняем во временное хранилище
                     image_id = generate_unique_id()
                     temp_images[image_id] = (image_data.getvalue(), time.time())
                     
-                    # Формируем URL для картинки
                     hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN", "localhost")
                     image_url = f"https://{hostname}/image/{image_id}"
                     
-                    # Редактируем сообщение: заменяем гифку на фото
-                    bot.edit_message_media(
-                        chat_id=chat_id,
-                        message_id=sent_message.message_id,
-                        media=telebot.types.InputMediaPhoto(
-                            media=image_url,
-                            caption=wish_text
-                        )
+                    bot.send_photo(
+                        chat_id,
+                        image_url,
+                        caption=wish_text
                     )
-                    print(f"✅ Картинка с пожеланием отправлена")
+                    print(f"✅ Пожелание отправлено")
                 else:
-                    print(f"❌ Не удалось создать картинку, отправляю текст")
-                    bot.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=sent_message.message_id,
-                        text=f"✨ {wish_text}"
-                    )
+                    bot.send_message(chat_id, f"✨ {wish_text}")
             except Exception as e:
-                print(f"❌ Ошибка при замене на картинку: {e}")
-                try:
-                    bot.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=sent_message.message_id,
-                        text=f"✨ {wish_text}"
-                    )
-                except:
-                    pass
+                print(f"❌ Ошибка при отправке пожелания: {e}")
         
-        # Запускаем таймер в отдельном потоке
-        threading.Thread(target=edit_to_wish, daemon=True).start()
+        threading.Thread(target=send_wish_later, daemon=True).start()
         
     except Exception as e:
-        print(f"❌ Ошибка в send_pepe_wish: {e}")
-        bot.send_message(chat_id, "✨ Держи пожелание: " + get_random_wish())
+        print(f"❌ Ошибка: {e}")
+        bot.send_message(chat_id, "✨ " + get_random_wish())
 
 # ========== INLINE РЕЖИМ ==========
 @bot.inline_handler(lambda query: True)
@@ -190,77 +185,96 @@ def inline_handler(inline_query):
     
     print(f"📨 Inline запрос от {user_id}: '{query_text}'")
     
-    # Только пустой запрос - показываем одно пожелание
     if query_text == "":
-        # Получаем пожелание
+        # Для инлайн тоже отправляем последовательность
         wish_text = get_random_wish()
+        gif_data, gif_name = get_random_gif()
         
-        # Создаем картинку
-        image_data = create_wish_image(wish_text)
-        
-        if image_data:
-            # Сохраняем во временное хранилище
-            image_id = generate_unique_id()
-            temp_images[image_id] = (image_data.getvalue(), time.time())
+        if gif_data:
+            # Сохраняем гифку во временное хранилище
+            gif_id = generate_unique_id()
+            temp_images[gif_id] = (gif_data, time.time())
             
             hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN", "localhost")
-            image_url = f"https://{hostname}/image/{image_id}"
+            gif_url = f"https://{hostname}/image/{gif_id}"
             
-            # Создаем результат с фото
-            result = telebot.types.InlineQueryResultPhoto(
-                id=image_id,
-                photo_url=image_url,
-                thumbnail_url=image_url,
-                photo_width=1080,
-                photo_height=720,
-                title="🎲 Получить пожелание",
-                description=wish_text[:50] + "...",
-                caption=wish_text
+            # Создаем результат с гифкой
+            result = telebot.types.InlineQueryResultGif(
+                id=gif_id,
+                gif_url=gif_url,
+                thumbnail_url=gif_url,
+                title="🎲 DobroPepe",
+                description="Нажми, чтобы получить пожелание",
+                caption="🎲 Кручу кубик... (12 секунд)"
             )
+            
+            # Также сохраняем пожелание, чтобы отправить позже
+            # (в инлайн-режиме нельзя отправить два сообщения сразу,
+            # поэтому пользователь получит гифку, а через 12 сек - пожелание
+            # от бота в личку)
             
             results = [result]
         else:
-            # Если не удалось создать картинку - отправляем текст
-            result = InlineQueryResultArticle(
-                id=generate_unique_id(),
-                title="✨ Пожелание",
-                description=wish_text[:50] + "...",
-                input_message_content=InputTextMessageContent(
-                    message_text=f"✨ {wish_text}"
+            # Если нет гифки - показываем фото
+            image_data = create_wish_image(wish_text)
+            if image_data:
+                image_id = generate_unique_id()
+                temp_images[image_id] = (image_data.getvalue(), time.time())
+                image_url = f"https://{hostname}/image/{image_id}"
+                
+                result = telebot.types.InlineQueryResultPhoto(
+                    id=image_id,
+                    photo_url=image_url,
+                    thumbnail_url=image_url,
+                    title="✨ Пожелание",
+                    description=wish_text[:50] + "...",
+                    caption=wish_text
                 )
-            )
-            results = [result]
+                results = [result]
+            else:
+                result = InlineQueryResultArticle(
+                    id=generate_unique_id(),
+                    title="✨ Пожелание",
+                    description=wish_text[:50] + "...",
+                    input_message_content=InputTextMessageContent(
+                        message_text=f"✨ {wish_text}"
+                    )
+                )
+                results = [result]
         
         try:
             bot.answer_inline_query(inline_query.id, results, cache_time=0, is_personal=True)
-            print(f"✅ Отправлено пожелание: {wish_text[:30]}...")
+            print(f"✅ Инлайн результат отправлен")
         except Exception as e:
             print(f"❌ Ошибка inline: {e}")
     else:
-        # Если запрос не пустой - показываем инструкцию
-        help_text = "❓ Просто отправь пустой запрос через @DobroPepeBot и получи пожелание!"
+        help_text = "❓ Просто отправь пустой запрос через @DobroPepeBot"
         result = InlineQueryResultArticle(
             id=generate_unique_id(),
             title="❓ Как пользоваться",
-            description="Отправь пустой запрос и получи пожелание",
+            description="Отправь пустой запрос",
             input_message_content=InputTextMessageContent(
                 message_text=help_text
             )
         )
         bot.answer_inline_query(inline_query.id, [result], cache_time=0)
 
-# ========== ЭНДПОИНТ ДЛЯ КАРТИНОК ==========
+# ========== ЭНДПОИНТ ДЛЯ ФАЙЛОВ ==========
 @app.route('/image/<image_id>', methods=['GET'])
 def serve_image(image_id):
-    """Отдает временные картинки"""
+    """Отдает временные картинки и гифки"""
     if image_id in temp_images:
         image_data, _ = temp_images[image_id]
         
+        # Определяем тип по содержимому или ID
+        is_gif = image_id.startswith('img_') and len(image_data) > 100  # Простая проверка
+        mimetype = 'image/gif' if is_gif else 'image/jpeg'
+        
         response = send_file(
             BytesIO(image_data),
-            mimetype='image/jpeg',
+            mimetype=mimetype,
             as_attachment=False,
-            download_name=f'{image_id}.jpg'
+            download_name=f'{image_id}.{"gif" if is_gif else "jpg"}'
         )
         
         response.headers['Access-Control-Allow-Origin'] = '*'
@@ -268,11 +282,10 @@ def serve_image(image_id):
         
         return response
         
-    return "Image not found", 404
+    return "File not found", 404
 
-# ========== ВЕБХУК ДЛЯ RAILWAY ==========
+# ========== ВЕБХУК ==========
 def setup_webhook():
-    """Настройка вебхука для Railway"""
     hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN")
     if not hostname:
         print("🌐 Локальный режим (без вебхука)")
@@ -294,7 +307,6 @@ def setup_webhook():
 
 @app.route(f'/{TELEGRAM_TOKEN}', methods=['POST'])
 def webhook():
-    """Обработчик вебхука"""
     if request.headers.get('content-type') == 'application/json':
         json_string = request.get_data().decode('utf-8')
         try:
@@ -309,7 +321,6 @@ def webhook():
 
 @app.route('/')
 def index():
-    """Главная страница"""
     gifs_count = 0
     try:
         gifs_folder = "assets/gifs"
@@ -327,7 +338,6 @@ def index():
 
 @app.route('/health')
 def health():
-    """Проверка здоровья"""
     return 'OK', 200
 
 if __name__ == '__main__':

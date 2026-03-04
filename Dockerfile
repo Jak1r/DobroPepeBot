@@ -11,15 +11,16 @@ RUN mkdir -p /app/assets/fonts
 RUN mkdir -p /app/assets/backgrounds
 RUN mkdir -p /app/assets/gifs
 
-# Устанавливаем шрифты
-RUN wget -O /app/assets/fonts/Impact.ttf "https://github.com/mat/best/raw/master/fonts/impact/impact.ttf"
-
 WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Копируем все файлы проекта
 COPY . .
+
+# Убеждаемся, что шрифты на месте
+RUN ls -la /app/assets/fonts/ && echo "Шрифты скопированы"
 
 # Создаем временную папку для изображений
 RUN mkdir -p /tmp/pepe_bot
