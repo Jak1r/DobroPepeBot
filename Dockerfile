@@ -25,4 +25,9 @@ RUN ls -la /app/assets/fonts/ && echo "Шрифты скопированы"
 # Создаем временную папку для изображений
 RUN mkdir -p /tmp/pepe_bot
 
+# Устанавливаем шрифт с эмодзи
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fonts-noto-color-emoji \
+    && rm -rf /var/lib/apt/lists/*
+
 CMD ["python", "bot.py"]
