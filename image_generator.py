@@ -4,6 +4,16 @@ import os
 from io import BytesIO
 import requests
 
+print("🔍 ПРОВЕРКА ШРИФТОВ:")
+fonts_dir = "assets/fonts"
+if os.path.exists(fonts_dir):
+    fonts = os.listdir(fonts_dir)
+    print(f"✅ Найдено шрифтов: {len(fonts)}")
+    for f in fonts:
+        print(f"   - {f}")
+else:
+    print(f"❌ Папка {fonts_dir} не найдена!")
+
 # Пути к ресурсам
 FONTS_DIR = 'assets/fonts'
 BACKGROUNDS_DIR = 'assets/backgrounds'

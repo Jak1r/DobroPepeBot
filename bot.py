@@ -186,7 +186,7 @@ def inline_handler(inline_query):
     print(f"📨 Inline запрос от {user_id}: '{query_text}'")
     
     if query_text == "":
-        # Для инлайн тоже отправляем последовательность
+        # Для инлайн отправляем гифку
         wish_text = get_random_wish()
         gif_data, gif_name = get_random_gif()
         
@@ -198,28 +198,46 @@ def inline_handler(inline_query):
             hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN", "localhost")
             gif_url = f"https://{hostname}/image/{gif_id}"
             
-            # Создаем результат с гифкой
+            # Убираем description, оставляем только поддерживаемые параметры
             result = telebot.types.InlineQueryResultGif(
                 id=gif_id,
                 gif_url=gif_url,
                 thumbnail_url=gif_url,
                 title="🎲 DobroPepe",
-                description="Нажми, чтобы получить пожелание",
                 caption="🎲 Кручу кубик... (12 секунд)"
             )
             
-            # Также сохраняем пожелание, чтобы отправить позже
-            # (в инлайн-режиме нельзя отправить два сообщения сразу,
-            # поэтому пользователь получит гифку, а через 12 сек - пожелание
-            # от бота в личку)
-            
             results = [result]
+            
+            # Запускаем отправку пожелания через 12 секунд
+            def send_wish_later():
+                time.sleep(12)
+                try:
+                    image_data = create_wish_image(wish_text)
+                    if image_data:
+                        image_id = generate_unique_id()
+                        temp_images[image_id] = (image_data.getvalue(), time.time())
+                        image_url = f"https://{hostname}/image/{image_id}"
+                        
+                        # Отправляем пожелание в личку пользователю
+                        bot.send_photo(
+                            user_id,
+                            image_url,
+                            caption=wish_text
+                        )
+                        print(f"✅ Пожелание отправлено в личку {user_id}")
+                except Exception as e:
+                    print(f"❌ Ошибка при отправке пожелания: {e}")
+            
+            threading.Thread(target=send_wish_later, daemon=True).start()
+            
         else:
             # Если нет гифки - показываем фото
             image_data = create_wish_image(wish_text)
             if image_data:
                 image_id = generate_unique_id()
                 temp_images[image_id] = (image_data.getvalue(), time.time())
+                hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN", "localhost")
                 image_url = f"https://{hostname}/image/{image_id}"
                 
                 result = telebot.types.InlineQueryResultPhoto(
