@@ -1,7 +1,8 @@
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont
 import random
 import os
 from io import BytesIO
+import traceback
 
 # Пути к ресурсам
 FONTS_DIR = 'assets/fonts'
