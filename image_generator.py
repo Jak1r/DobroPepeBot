@@ -35,12 +35,8 @@ BOLD_FONTS = [
     os.path.join(FONTS_DIR, 'Jost-VariableFont_wght.ttf'),        # Тоже вариабельный
 ]
 
-# 👇 ОБНОВЛЕНО: теперь ищем NotoColorEmoji в папке assets/fonts/
-EMOJI_FONT_PATHS = [
-    os.path.join(FONTS_DIR, 'NotoColorEmoji.ttf'),        # Локальный файл
-    '/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf',  # Системный (запасной)
-    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',  # Запасной вариант
-]
+# 👇 Путь к локальному NotoColorEmoji
+NOTO_EMOJI_PATH = os.path.join(FONTS_DIR, 'NotoColorEmoji.ttf')
 
 def get_random_bold_font(size):
     """Выбирает случайный жирный шрифт и загружает его"""
@@ -54,32 +50,26 @@ def get_random_bold_font(size):
     
     if not available_fonts:
         print(f"  ⚠️ Нет жирных шрифтов, ищу любые...")
-        # Если нет жирных, ищем любые
         for f in os.listdir(FONTS_DIR):
-            if f.endswith('.ttf') and f != 'NotoColorEmoji.ttf':  # Исключаем эмодзи-шрифт
+            if f.endswith('.ttf') and f != 'NotoColorEmoji.ttf':
                 available_fonts.append(os.path.join(FONTS_DIR, f))
     
     if not available_fonts:
         print(f"  ❌ Вообще нет шрифтов!")
         return ImageFont.load_default()
     
-    # Выбираем случайный шрифт из доступных
     selected = random.choice(available_fonts)
     print(f"  🎲 Выбран шрифт: {os.path.basename(selected)}")
     
     try:
-        # Для вариабельных шрифтов пробуем установить жирное начертание
         font = ImageFont.truetype(selected, size)
         
         # Пробуем установить жирное начертание если шрифт вариабельный
         try:
-            # Проверяем, поддерживает ли шрифт вариации
             if 'Variable' in selected or 'Montserrat' in selected or 'Nunito' in selected or 'Jost' in selected:
-                # Пытаемся установить жирность
                 font.set_variation_by_name('Bold')
                 print(f"  ✅ Установлено жирное начертание")
         except:
-            # Если не получилось, просто используем как есть
             pass
         
         return font
@@ -88,18 +78,16 @@ def get_random_bold_font(size):
         return ImageFont.load_default()
 
 def get_emoji_font(size):
-    """Загружает шрифт для эмодзи (сначала из локальной папки)"""
-    for font_path in EMOJI_FONT_PATHS:
-        if os.path.exists(font_path):
-            try:
-                font = ImageFont.truetype(font_path, size)
-                print(f"  ✅ Загружен эмодзи-шрифт: {os.path.basename(font_path)}")
-                return font
-            except Exception as e:
-                print(f"  ⚠️ Ошибка загрузки {font_path}: {e}")
-                continue
+    """Загружает шрифт для эмодзи из локальной папки"""
+    if os.path.exists(NOTO_EMOJI_PATH):
+        try:
+            font = ImageFont.truetype(NOTO_EMOJI_PATH, size)
+            print(f"  ✅ Загружен эмодзи-шрифт: NotoColorEmoji.ttf")
+            return font
+        except Exception as e:
+            print(f"  ⚠️ Ошибка загрузки NotoColorEmoji: {e}")
     
-    print(f"  ⚠️ Эмодзи-шрифт не найден, буду использовать жирный шрифт")
+    print(f"  ⚠️ Эмодзи-шрифт не найден")
     return None
 
 def get_random_background():
@@ -123,7 +111,6 @@ def create_gradient_background(width, height):
     img = Image.new('RGB', (width, height), color='white')
     draw = ImageDraw.Draw(img)
     
-    # Рисуем градиент от светлого к темному
     for i in range(height):
         color_value = int(200 + (55 * i / height))
         draw.line([(0, i), (width, i)], fill=(color_value, color_value, color_value))
@@ -153,47 +140,42 @@ def wrap_text(text, font, max_width, draw):
     
     return lines
 
-def draw_text_with_emoji(draw, text, font_bold, font_emoji, x_start, y, color=(255, 255, 255)):
+def draw_text_with_emoji(draw, text, font_bold, font_emoji, x, y, color=(255, 255, 255)):
     """
     Рисует текст, переключаясь между жирным шрифтом и шрифтом с эмодзи.
     """
-    current_x = x_start
+    current_x = x
     
     # Если нет шрифта для эмодзи, рисуем всё жирным шрифтом
     if not font_emoji:
         draw.text((current_x, y), text, font=font_bold, fill=color)
-        return current_x + draw.textbbox((0, 0), text, font=font_bold)[2]
+        return
     
     # Разбиваем текст на части: обычный текст и эмодзи
-    parts = []
-    current_part = ""
-    
     i = 0
     while i < len(text):
         char = text[i]
+        
         # Проверяем, является ли символ эмодзи
         if char in emoji.EMOJI_DATA:
-            if current_part:
-                parts.append(('text', current_part))
-                current_part = ""
-            parts.append(('emoji', char))
+            # Рисуем эмодзи отдельно
+            draw.text((current_x, y), char, font=font_emoji, fill=color)
+            bbox = draw.textbbox((0, 0), char, font=font_emoji)
+            current_x += bbox[2] - bbox[0]
         else:
-            current_part += char
-        i += 1
-    
-    if current_part:
-        parts.append(('text', current_part))
-    
-    # Рисуем каждую часть своим шрифтом
-    for part_type, part_text in parts:
-        font = font_emoji if part_type == 'emoji' else font_bold
-        bbox = draw.textbbox((0, 0), part_text, font=font)
-        part_width = bbox[2] - bbox[0]
+            # Собираем последовательность обычных символов
+            text_part = ""
+            while i < len(text) and text[i] not in emoji.EMOJI_DATA:
+                text_part += text[i]
+                i += 1
+            i -= 1  # корректировка
+            
+            # Рисуем обычный текст
+            draw.text((current_x, y), text_part, font=font_bold, fill=color)
+            bbox = draw.textbbox((0, 0), text_part, font=font_bold)
+            current_x += bbox[2] - bbox[0]
         
-        draw.text((current_x, y), part_text, font=font, fill=color)
-        current_x += part_width
-    
-    return current_x
+        i += 1
 
 def create_wish_image(text):
     """Создает изображение с текстом пожелания на фоне"""
@@ -215,7 +197,7 @@ def create_wish_image(text):
             print(f"  ✅ Создан градиентный фон")
         
         # 2. Затемняем фон для лучшей читаемости
-        overlay = Image.new('RGBA', (width, height), (0, 0, 0, 80))
+        overlay = Image.new('RGBA', (width, height), (0, 0, 0, 70))
         bg.paste(overlay, (0, 0), overlay)
         
         # 3. Подготавливаем шрифты
@@ -243,23 +225,12 @@ def create_wish_image(text):
             lines = wrap_text(text, font_bold, max_width, draw)
             print(f"  📊 Строк стало: {len(lines)}")
         
-        # 4. Рисуем текст построчно с поддержкой эмодзи
+        # 4. Рисуем текст построчно (БЕЗ ТЕНИ)
         line_height = font_size + 15
         total_text_height = len(lines) * line_height
         start_y = (height - total_text_height) // 2
         
-        # Сначала рисуем тень (только для обычного текста, жирным шрифтом)
-        shadow_offset = 5
-        shadow_color = (0, 0, 0, 220)
-        
-        for i, line in enumerate(lines):
-            y = start_y + (i * line_height)
-            
-            # Для тени используем жирный шрифт
-            draw.text((margin + shadow_offset, y + shadow_offset), line, 
-                     font=font_bold, fill=shadow_color)
-        
-        # Рисуем основной текст с эмодзи
+        # Рисуем только основной текст (без тени)
         for i, line in enumerate(lines):
             y = start_y + (i * line_height)
             draw_text_with_emoji(draw, line, font_bold, font_emoji, margin, y, color=(255, 255, 255))

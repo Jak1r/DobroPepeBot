@@ -144,7 +144,7 @@ def handle_about_button(message):
     about_text = "🧡 **О боте**\n\nDobroPepeBot создан, чтобы дарить людям тепло и поддержку."
     bot.send_message(message.chat.id, about_text, parse_mode='Markdown')
 
-# ========== ЛИЧКА: ГИФКА → ЧЕРЕЗ 12 СЕК РЕДАКТИРУЕТСЯ ==========
+# ========== ЛИЧКА: ГИФКА → ЧЕРЕЗ 8 СЕК РЕДАКТИРУЕТСЯ ==========
 def send_pepe_wish_sequence(chat_id):
     """Отправляет гифку с кубиком, затем картинку с пожеланием"""
     try:
@@ -180,7 +180,7 @@ def send_pepe_wish_sequence(chat_id):
             gif_message = bot.send_animation(
                 chat_id,
                 gif_url,
-                caption="🎲 Кручу кубик... (12 секунд)"
+                caption="🎲 Кручу кубик..."
             )
             print(f"  ✅ Гифка отправлена через URL, ID: {gif_message.message_id}")
         except Exception as e:
@@ -189,12 +189,12 @@ def send_pepe_wish_sequence(chat_id):
             gif_message = bot.send_animation(
                 chat_id,
                 gif_data,
-                caption="🎲 Кручу кубик... (12 секунд)"
+                caption="🎲 Кручу кубик..."
             )
             print(f"  ✅ Гифка отправлена через bytes, ID: {gif_message.message_id}")
         
         def send_wish_later():
-            time.sleep(12)
+            time.sleep(8)
             try:
                 wish_text = get_random_wish()
                 print(f"  ✨ Пожелание: {wish_text[:30]}...")
