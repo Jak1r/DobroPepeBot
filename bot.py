@@ -143,12 +143,21 @@ def send_pepe_wish_sequence(chat_id):
             bot.send_message(chat_id, "✨ " + get_random_wish())
             return
         
-        # Отправляем гифку
-        gif_message = bot.send_animation(
-            chat_id,
-            gif_data,
-            caption="🎲 Кручу кубик... (12 секунд)"
-        )
+        # Проверяем, что это действительно GIF
+        if gif_data.startswith(b'GIF87a') or gif_data.startswith(b'GIF89a'):
+            print(f"  ✅ Это GIF, отправляю анимацию")
+            
+            # Отправляем гифку
+            gif_message = bot.send_animation(
+                chat_id,
+                gif_data,
+                caption="🎲 Кручу кубик... (12 секунд)"
+            )
+            print(f"  ✅ Гифка отправлена, ID: {gif_message.message_id}")
+        else:
+            print(f"  ❌ Файл не является GIF")
+            bot.send_message(chat_id, "✨ " + get_random_wish())
+            return
         
         def send_wish_later():
             time.sleep(12)
@@ -173,15 +182,17 @@ def send_pepe_wish_sequence(chat_id):
                                 caption=wish_text
                             )
                         )
+                        print(f"  ✅ Сообщение отредактировано")
                     except Exception as e:
-                        # Если не получается отредактировать, отправляем новым сообщением
                         print(f"⚠️ Не удалось отредактировать: {e}")
+                        # Отправляем новым сообщением
                         bot.send_photo(
                             chat_id,
                             image_url,
                             caption=wish_text
                         )
                 else:
+                    # Если картинка не создалась, отправляем текст
                     bot.edit_message_text(
                         chat_id=chat_id,
                         message_id=gif_message.message_id,
@@ -194,6 +205,7 @@ def send_pepe_wish_sequence(chat_id):
         
     except Exception as e:
         print(f"❌ Ошибка: {e}")
+        traceback.print_exc()
         bot.send_message(chat_id, "✨ " + get_random_wish())
 
 # ========== ИНЛАЙН: ГИФКА С КНОПКОЙ ==========
@@ -203,19 +215,31 @@ def inline_handler(inline_query):
     user_id = inline_query.from_user.id
     
     print(f"\n🔥🔥🔥 INLINE от {user_id}: '{query_text}'")
+    hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN", "localhost")
+    print(f"  🌐 Хост: {hostname}")
+    print(f"  🔗 Базовый URL: https://{hostname}")
     
     results = []
-    hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN", "localhost")
     
     try:
         if query_text == "":
             # Пустой запрос - показываем гифку с кнопкой
+            print(f"  ✅ Пустой запрос, ищем гифку...")
             gif_data, gif_name = get_random_gif_from_local()
             
             if gif_data:
                 gif_id = generate_unique_id("gif")
                 temp_images[gif_id] = (gif_data, time.time())
                 gif_url = f"https://{hostname}/image/{gif_id}"
+                print(f"  🔗 GIF URL: {gif_url}")
+                
+                # Проверяем, что URL доступен (для отладки)
+                try:
+                    import requests
+                    r = requests.head(gif_url, timeout=2)
+                    print(f"  📡 Проверка URL: статус {r.status_code}")
+                except:
+                    print(f"  ⚠️ URL пока недоступен (но это нормально для первого запроса)")
                 
                 # Создаем клавиатуру с кнопкой
                 keyboard = InlineKeyboardMarkup()
@@ -230,11 +254,15 @@ def inline_handler(inline_query):
                     id=gif_id,
                     gif_url=gif_url,
                     thumbnail_url=gif_url,
-                    title="🎲 DobroPepe",
-                    reply_markup=keyboard
+                    title="🎲 DobroPepe - получи пожелание",
+                    reply_markup=keyboard,
+                    gif_width=320,
+                    gif_height=240
                 )
                 results.append(result)
+                print(f"  ✅ GIF результат добавлен")
             else:
+                print(f"  ❌ Нет гифок, показываем пожелание")
                 # Если нет гифки - показываем пожелание
                 wish_text = get_random_wish()
                 image_data = create_wish_image(wish_text)
@@ -248,13 +276,17 @@ def inline_handler(inline_query):
                         id=image_id,
                         photo_url=image_url,
                         thumbnail_url=image_url,
+                        photo_width=1080,
+                        photo_height=720,
                         title="✨ Пожелание",
                         description=wish_text[:50]
                     )
                     results.append(result)
+                    print(f"  ✅ Пожелание добавлено")
         
         elif query_text == "wish":
             # Команда wish - показываем пожелание
+            print(f"  ✅ Команда wish")
             wish_text = get_random_wish()
             image_data = create_wish_image(wish_text)
             
@@ -267,45 +299,90 @@ def inline_handler(inline_query):
                     id=image_id,
                     photo_url=image_url,
                     thumbnail_url=image_url,
+                    photo_width=1080,
+                    photo_height=720,
                     title="✨ Пожелание",
                     description=wish_text[:50]
                 )
                 results.append(result)
+                print(f"  ✅ Пожелание добавлено")
         
         else:
             # Любой другой запрос - показываем подсказку
+            print(f"  ℹ️ Неизвестный запрос, показываем подсказку")
             result = InlineQueryResultArticle(
                 id=generate_unique_id("help"),
                 title="❓ Как пользоваться",
                 description="Отправь пустой запрос, чтобы получить гифку с кнопкой",
                 input_message_content=InputTextMessageContent(
-                    "❓ Просто отправь пустой запрос @DobroPepeBot"
+                    "❓ Просто отправь пустой запрос @DobroPepeBot\n\n"
+                    "Например: @DobroPepeBot и сразу отправь"
                 )
             )
             results.append(result)
         
         # Отправляем результаты
         if results:
-            bot.answer_inline_query(inline_query.id, results, cache_time=0, is_personal=True)
-            print(f"✅ Отправлено {len(results)} результатов")
+            try:
+                bot.answer_inline_query(
+                    inline_query.id, 
+                    results, 
+                    cache_time=0, 
+                    is_personal=True
+                )
+                print(f"✅ Отправлено {len(results)} результатов")
+            except Exception as e:
+                print(f"❌ Ошибка при отправке результатов: {e}")
+                traceback.print_exc()
+                
+                # Пробуем отправить заглушку
+                try:
+                    fallback = InlineQueryResultArticle(
+                        id=generate_unique_id("error"),
+                        title="❌ Ошибка",
+                        description="Попробуйте позже",
+                        input_message_content=InputTextMessageContent(
+                            "😢 Что-то пошло не так. Попробуйте позже."
+                        )
+                    )
+                    bot.answer_inline_query(inline_query.id, [fallback], cache_time=0)
+                except:
+                    pass
         else:
-            # Заглушка
-            result = InlineQueryResultArticle(
+            print(f"⚠️ Нет результатов, отправляю заглушку")
+            fallback = InlineQueryResultArticle(
                 id=generate_unique_id("empty"),
-                title="❌ Ошибка",
+                title="❌ Нет результатов",
                 description="Попробуйте позже",
-                input_message_content=InputTextMessageContent("❌ Что-то пошло не так")
+                input_message_content=InputTextMessageContent(
+                    "😢 Не удалось загрузить контент. Попробуйте позже."
+                )
             )
-            bot.answer_inline_query(inline_query.id, [result], cache_time=0)
+            bot.answer_inline_query(inline_query.id, [fallback], cache_time=0)
             
     except Exception as e:
-        print(f"❌ ОШИБКА: {e}")
+        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА В INLINE: {e}")
         traceback.print_exc()
+        
+        # Отправляем заглушку об ошибке
+        try:
+            error_result = InlineQueryResultArticle(
+                id=generate_unique_id("error"),
+                title="❌ Ошибка",
+                description="Что-то пошло не так",
+                input_message_content=InputTextMessageContent(
+                    "😢 Произошла ошибка. Попробуйте позже."
+                )
+            )
+            bot.answer_inline_query(inline_query.id, [error_result], cache_time=0)
+        except:
+            pass
 
 # ========== ОБРАБОТЧИК КОЛБЭКОВ ==========
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
     print(f"🔥 Callback: {call.data}")
+    print(f"  📱 Тип: {'inline' if call.inline_message_id else 'обычное сообщение'}")
     
     try:
         if call.data.startswith("wish_"):
@@ -324,26 +401,56 @@ def handle_callback(call):
                 hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN", "localhost")
                 image_url = f"https://{hostname}/image/{image_id}"
                 
-                # Отправляем пожелание в тот же чат
-                bot.send_photo(
-                    call.message.chat.id,
-                    image_url,
-                    caption=wish_text,
-                    reply_to_message_id=call.message.message_id
-                )
+                # Проверяем, откуда пришел callback
+                if call.inline_message_id:
+                    # Это inline режим - редактируем исходное сообщение
+                    try:
+                        bot.edit_message_media(
+                            inline_message_id=call.inline_message_id,
+                            media=telebot.types.InputMediaPhoto(
+                                media=image_url,
+                                caption=wish_text
+                            )
+                        )
+                        print(f"  ✅ Inline сообщение отредактировано")
+                    except Exception as e:
+                        print(f"  ⚠️ Не удалось отредактировать: {e}")
+                        # Если не получается отредактировать, отправляем новым сообщением
+                        bot.send_photo(
+                            call.from_user.id,
+                            image_url,
+                            caption=wish_text
+                        )
+                else:
+                    # Это обычное сообщение в личке
+                    bot.send_photo(
+                        call.message.chat.id,
+                        image_url,
+                        caption=wish_text,
+                        reply_to_message_id=call.message.message_id
+                    )
+                    print(f"  ✅ Пожелание отправлено в личку")
             else:
-                bot.send_message(
-                    call.message.chat.id,
-                    f"✨ {wish_text}",
-                    reply_to_message_id=call.message.message_id
-                )
+                # Если не удалось создать картинку
+                wish_text_plain = f"✨ {wish_text}"
+                if call.inline_message_id:
+                    bot.edit_message_text(
+                        inline_message_id=call.inline_message_id,
+                        text=wish_text_plain
+                    )
+                else:
+                    bot.send_message(
+                        call.message.chat.id,
+                        wish_text_plain,
+                        reply_to_message_id=call.message.message_id
+                    )
             
             bot.answer_callback_query(call.id)
             
     except Exception as e:
-        print(f"❌ Ошибка: {e}")
+        print(f"❌ Ошибка в callback: {e}")
         traceback.print_exc()
-        bot.answer_callback_query(call.id, text="😢 Ошибка")
+        bot.answer_callback_query(call.id, text="😢 Ошибка", show_alert=False)
 
 # ========== ЭНДПОИНТ ДЛЯ ФАЙЛОВ ==========
 @app.route('/image/<image_id>', methods=['GET', 'HEAD'])
