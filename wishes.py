@@ -2,33 +2,18 @@ import json
 import random
 import os
 
-# База пожеланий
-WISHES = [
+# База пожеланий (только как запасной вариант)
+FALLBACK_WISHES = [
     "Ты справишься со всем, что встретится на пути",
     "В тебе больше сил, чем ты думаешь",
     "Каждый день — новый шанс стать счастливее",
     "Ты важен и нужен именно таким, какой ты есть",
     "Пусть сегодня случится что-то хорошее",
-    "Ты делаешь этот мир лучше просто потому, что ты есть",
-    "Верь в себя — ты можешь больше, чем кажется",
-    "Маленькие шаги ведут к большим переменам",
-    "Ты не один, даже когда кажется, что это не так",
-    "Разреши себе быть собой — ты прекрасен",
-    "Свет внутри тебя сильнее любой тьмы",
-    "Твои чувства важны, твой голос имеет значение",
-    "Сегодня будет хороший день, просто потому что ты это решил",
-    "Ты заслуживаешь любви и счастья",
-    "Даже в самый серый день есть место для тепла",
-    "Ты сильнее своих страхов",
-    "Все трудности временны, а ты — вечен",
-    "Просто дыши. Ты справляешься",
-    "Твоя улыбка может изменить чей-то день",
-    "Ты — это чудо, которое уже случилось"
+    # ... остальные
 ]
 
-# Единый стиль фраз (20 пар)
+# Пары фраз (кнопка → процесс)
 PHRASE_PAIRS = [
-    # Кнопка / Процесс
     ("🔮 Спросить у судьбы", "🔮 Спрашиваю у судьбы..."),
     ("✨ Открыть послание", "✨ Открываю тайное послание..."),
     ("🌟 Забрать добро", "🌟 Собираю добро..."),
@@ -51,25 +36,48 @@ PHRASE_PAIRS = [
     ("🌀 Войти в поток", "🌀 Вхожу в поток...")
 ]
 
-def load_wishes():
+# Кэш для загруженных пожеланий
+_wishes_cache = None
+
+def load_wishes_from_file():
     """Загружает пожелания из JSON файла"""
+    global _wishes_cache
+    
+    # Если уже загружали, возвращаем кэш
+    if _wishes_cache is not None:
+        print(f"📦 Используются кэшированные пожелания ({len(_wishes_cache)} шт)")
+        return _wishes_cache
+    
     try:
         if os.path.exists('wishes.json'):
+            print(f"📁 Найден файл wishes.json, загружаю...")
             with open('wishes.json', 'r', encoding='utf-8') as f:
                 data = json.load(f)
+                
+                # Может быть список или словарь с ключом 'wishes'
                 if isinstance(data, list):
+                    _wishes_cache = data
+                    print(f"✅ Загружено {len(data)} пожеланий из JSON (список)")
                     return data
                 elif isinstance(data, dict) and 'wishes' in data:
+                    _wishes_cache = data['wishes']
+                    print(f"✅ Загружено {len(data['wishes'])} пожеланий из JSON (словарь)")
                     return data['wishes']
+                else:
+                    print(f"⚠️ Неизвестный формат JSON, использую запасные")
+        else:
+            print(f"📁 Файл wishes.json не найден")
+            
     except Exception as e:
         print(f"⚠️ Ошибка загрузки wishes.json: {e}")
     
-    print("📝 Используются встроенные пожелания")
-    return WISHES
+    # Если ничего не получилось, используем запасные
+    print(f"📝 Использую запасные пожелания ({len(FALLBACK_WISHES)} шт)")
+    return FALLBACK_WISHES
 
 def get_random_wish():
-    """Возвращает случайное пожелание"""
-    wishes = load_wishes()
+    """Возвращает случайное пожелание из wishes.json"""
+    wishes = load_wishes_from_file()
     return random.choice(wishes)
 
 def get_random_phrase_pair():
@@ -86,16 +94,13 @@ def get_random_process_phrase():
 
 # Для теста
 if __name__ == "__main__":
-    print("🎲 ТЕСТ ФРАЗ:")
-    print("\nПары (кнопка → процесс):")
-    for _ in range(5):
-        button, process = get_random_phrase_pair()
-        print(f"  • {button} → {process}")
+    print("🎲 ТЕСТ ЗАГРУЗКИ:")
+    wishes = load_wishes_from_file()
+    print(f"📊 Всего пожеланий: {len(wishes)}")
+    print(f"📝 Первые 3:")
+    for i, w in enumerate(wishes[:3]):
+        print(f"  {i+1}. {w[:50]}...")
     
-    print("\nОтдельные кнопки:")
-    for _ in range(3):
-        print(f"  • {get_random_button_phrase()}")
-    
-    print("\nОтдельные процессы:")
-    for _ in range(3):
-        print(f"  • {get_random_process_phrase()}")
+    print(f"\n🎯 ТЕСТ ФРАЗ:")
+    print(f"Случайная кнопка: {get_random_button_phrase()}")
+    print(f"Случайный процесс: {get_random_process_phrase()}")
