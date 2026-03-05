@@ -12,7 +12,7 @@ import sys
 from datetime import datetime
 
 # Импортируем наши модули
-from wishes import get_random_wish
+from wishes import get_random_wish, get_random_button_phrase, get_random_process_phrase
 from image_generator import create_wish_image
 
 load_dotenv()
@@ -30,6 +30,7 @@ print("🎲 Бот с добрыми пожеланиями")
 fonts_dir = "assets/fonts"
 gifs_dir = "assets/gifs"
 backgrounds_dir = "assets/backgrounds"
+emojis_dir = "assets/emojis"
 
 if os.path.exists(fonts_dir):
     fonts = os.listdir(fonts_dir)
@@ -40,6 +41,9 @@ if os.path.exists(gifs_dir):
 if os.path.exists(backgrounds_dir):
     bgs = [f for f in os.listdir(backgrounds_dir) if f.endswith(('.jpg', '.jpeg', '.png'))]
     print(f"🖼️ ФОНОВ: {len(bgs)}")
+if os.path.exists(emojis_dir):
+    emoji_files = [f for f in os.listdir(emojis_dir) if f.endswith('.png')]
+    print(f"✨ ЭМОДЗИ-PNG: {len(emoji_files)}")
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN, threaded=False)
 app = Flask(__name__)
@@ -82,21 +86,19 @@ def get_random_gif_from_local():
             return None, None
             
         gif_files = [f for f in os.listdir(gifs_folder) if f.endswith('.gif')]
-        print(f"  📁 Найдено .gif файлов: {len(gif_files)}")
         
         if not gif_files:
             return None, None
             
         selected = random.choice(gif_files)
         gif_path = os.path.join(gifs_folder, selected)
-        print(f"  🎲 Выбрана: {selected}")
         
         with open(gif_path, 'rb') as f:
             gif_data = f.read()
         
         # Проверяем сигнатуру
         if gif_data.startswith(b'GIF87a') or gif_data.startswith(b'GIF89a'):
-            print(f"  ✅ Это GIF (сигнатура верна)")
+            print(f"  ✅ Это GIF")
         else:
             print(f"  ⚠️ Странная сигнатура: {gif_data[:10]}")
         
@@ -104,7 +106,6 @@ def get_random_gif_from_local():
         
     except Exception as e:
         print(f"  ❌ Ошибка: {e}")
-        traceback.print_exc()
         return None, None
 
 # ========== ФУНКЦИИ ДЛЯ ЛИЧНЫХ СООБЩЕНИЙ ==========
@@ -123,8 +124,7 @@ def send_welcome(message):
         "📝 **Как пользоваться:**\n"
         "• В **личных сообщениях** нажми кнопку ниже 👇\n"
         "• В **любом чате** просто напиши @DobroPepeBot\n\n"
-        "🎲 Я пришлю гифку с кубиком, а под ней будет кнопка "
-        "— нажми её, чтобы получить пожелание!\n\n"
+        "🎲 Я пришлю гифку, а затем — пожелание, которое согреет душу.\n\n"
         "Поехали! 🚀"
     )
     
@@ -137,61 +137,58 @@ def send_welcome(message):
 
 @bot.message_handler(func=lambda message: message.text == "🎲 Получить пожелание")
 def handle_wish_button(message):
+    print(f"🔥 Кнопка 'Получить пожелание' от {message.from_user.id}")
     send_pepe_wish_sequence(message.chat.id)
 
 @bot.message_handler(func=lambda message: message.text == "📖 О боте")
 def handle_about_button(message):
-    about_text = "🧡 **О боте**\n\nDobroPepeBot создан, чтобы дарить людям тепло и поддержку."
+    about_text = (
+        "🧡 **О боте**\n\n"
+        "DobroPepeBot создан, чтобы дарить людям тепло и поддержку.\n"
+        "Каждое пожелание — это маленький лучик света в твой день.\n\n"
+        "С любовью, команда DobroPepe 🤗"
+    )
     bot.send_message(message.chat.id, about_text, parse_mode='Markdown')
 
 # ========== ЛИЧКА: ГИФКА → ЧЕРЕЗ 8 СЕК РЕДАКТИРУЕТСЯ ==========
 def send_pepe_wish_sequence(chat_id):
-    """Отправляет гифку с кубиком, затем картинку с пожеланием"""
+    """Отправляет гифку, затем картинку с пожеланием"""
     try:
         print(f"\n🎬 send_pepe_wish_sequence для {chat_id}")
+        
+        # Получаем случайную фразу для процесса
+        process_phrase = get_random_process_phrase()
+        print(f"  💬 Фраза процесса: {process_phrase}")
         
         # Получаем случайную гифку
         gif_data, gif_name = get_random_gif_from_local()
         
         if not gif_data:
             print(f"  ❌ Нет гифок, отправляю только пожелание")
-            bot.send_message(chat_id, "✨ " + get_random_wish())
+            wish_text = get_random_wish()
+            bot.send_message(chat_id, f"✨ {wish_text} ✨")
             return
-        
-        print(f"  ✅ Гифка получена: {gif_name}, размер: {len(gif_data)} байт")
-        print(f"  🔍 Первые байты: {gif_data[:10]}")
         
         # Проверяем, что это действительно GIF
         if not (gif_data.startswith(b'GIF87a') or gif_data.startswith(b'GIF89a')):
             print(f"  ❌ Файл не является GIF!")
-            bot.send_message(chat_id, "✨ " + get_random_wish())
+            wish_text = get_random_wish()
+            bot.send_message(chat_id, f"✨ {wish_text} ✨")
             return
         
-        # Сохраняем гифку во временное хранилище для создания URL
+        # Сохраняем гифку во временное хранилище
         gif_id = generate_unique_id("gif")
         temp_images[gif_id] = (gif_data, time.time())
         hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN", "localhost")
         gif_url = f"https://{hostname}/image/{gif_id}"
         
-        print(f"  🔗 GIF URL: {gif_url}")
-        
-        # Отправляем гифку через URL (этот метод работает надежнее)
-        try:
-            gif_message = bot.send_animation(
-                chat_id,
-                gif_url,
-                caption="🎲 Кручу кубик..."
-            )
-            print(f"  ✅ Гифка отправлена через URL, ID: {gif_message.message_id}")
-        except Exception as e:
-            print(f"  ⚠️ Не удалось отправить через URL, пробую через bytes: {e}")
-            # Если не получилось через URL, пробуем через bytes
-            gif_message = bot.send_animation(
-                chat_id,
-                gif_data,
-                caption="🎲 Кручу кубик..."
-            )
-            print(f"  ✅ Гифка отправлена через bytes, ID: {gif_message.message_id}")
+        # Отправляем гифку с креативной фразой
+        gif_message = bot.send_animation(
+            chat_id,
+            gif_url,
+            caption=process_phrase
+        )
+        print(f"  ✅ Гифка отправлена, ID: {gif_message.message_id}")
         
         def send_wish_later():
             time.sleep(8)
@@ -213,7 +210,7 @@ def send_pepe_wish_sequence(chat_id):
                             message_id=gif_message.message_id,
                             media=telebot.types.InputMediaPhoto(
                                 media=image_url,
-                                caption=wish_text
+                                caption=f"✨ {wish_text} ✨"  # Добавляем блёстки в подпись
                             )
                         )
                         print(f"  ✅ Сообщение отредактировано на фото")
@@ -223,7 +220,7 @@ def send_pepe_wish_sequence(chat_id):
                         bot.send_photo(
                             chat_id,
                             image_url,
-                            caption=wish_text
+                            caption=f"✨ {wish_text} ✨"  # Добавляем блёстки в подпись
                         )
                         print(f"  ✅ Отправлено новое сообщение с фото")
                 else:
@@ -231,7 +228,7 @@ def send_pepe_wish_sequence(chat_id):
                     bot.edit_message_text(
                         chat_id=chat_id,
                         message_id=gif_message.message_id,
-                        text=f"✨ {wish_text}"
+                        text=f"✨ {wish_text} ✨"  # Добавляем блёстки в текст
                     )
             except Exception as e:
                 print(f"❌ Ошибка в send_wish_later: {e}")
@@ -242,7 +239,8 @@ def send_pepe_wish_sequence(chat_id):
     except Exception as e:
         print(f"❌ Ошибка в send_pepe_wish_sequence: {e}")
         traceback.print_exc()
-        bot.send_message(chat_id, "✨ " + get_random_wish())
+        wish_text = get_random_wish()
+        bot.send_message(chat_id, f"✨ {wish_text} ✨")
 
 # ========== ИНЛАЙН: ГИФКА С КНОПКОЙ ==========
 @bot.inline_handler(lambda query: True)
@@ -252,8 +250,6 @@ def inline_handler(inline_query):
     
     print(f"\n🔥🔥🔥 INLINE от {user_id}: '{query_text}'")
     hostname = os.getenv("RAILWAY_PUBLIC_DOMAIN", "localhost")
-    print(f"  🌐 Хост: {hostname}")
-    print(f"  🔗 Базовый URL: https://{hostname}")
     
     results = []
     
@@ -267,20 +263,14 @@ def inline_handler(inline_query):
                 gif_id = generate_unique_id("gif")
                 temp_images[gif_id] = (gif_data, time.time())
                 gif_url = f"https://{hostname}/image/{gif_id}"
-                print(f"  🔗 GIF URL: {gif_url}")
                 
-                # Проверяем, что URL доступен (для отладки)
-                try:
-                    import requests
-                    r = requests.head(gif_url, timeout=2)
-                    print(f"  📡 Проверка URL: статус {r.status_code}")
-                except:
-                    print(f"  ⚠️ URL пока недоступен (но это нормально для первого запроса)")
+                # Получаем случайную фразу для кнопки
+                button_phrase = get_random_button_phrase()
                 
                 # Создаем клавиатуру с кнопкой
                 keyboard = InlineKeyboardMarkup()
                 button = InlineKeyboardButton(
-                    "🎁 Получить пожелание", 
+                    button_phrase,
                     callback_data=f"wish_{user_id}"
                 )
                 keyboard.add(button)
@@ -296,10 +286,9 @@ def inline_handler(inline_query):
                     gif_height=240
                 )
                 results.append(result)
-                print(f"  ✅ GIF результат добавлен")
+                print(f"  ✅ GIF результат добавлен с кнопкой: {button_phrase}")
             else:
                 print(f"  ❌ Нет гифок, показываем пожелание")
-                # Если нет гифки - показываем пожелание
                 wish_text = get_random_wish()
                 image_data = create_wish_image(wish_text)
                 
@@ -370,20 +359,6 @@ def inline_handler(inline_query):
             except Exception as e:
                 print(f"❌ Ошибка при отправке результатов: {e}")
                 traceback.print_exc()
-                
-                # Пробуем отправить заглушку
-                try:
-                    fallback = InlineQueryResultArticle(
-                        id=generate_unique_id("error"),
-                        title="❌ Ошибка",
-                        description="Попробуйте позже",
-                        input_message_content=InputTextMessageContent(
-                            "😢 Что-то пошло не так. Попробуйте позже."
-                        )
-                    )
-                    bot.answer_inline_query(inline_query.id, [fallback], cache_time=0)
-                except:
-                    pass
         else:
             print(f"⚠️ Нет результатов, отправляю заглушку")
             fallback = InlineQueryResultArticle(
@@ -400,7 +375,6 @@ def inline_handler(inline_query):
         print(f"❌ КРИТИЧЕСКАЯ ОШИБКА В INLINE: {e}")
         traceback.print_exc()
         
-        # Отправляем заглушку об ошибке
         try:
             error_result = InlineQueryResultArticle(
                 id=generate_unique_id("error"),
@@ -445,30 +419,30 @@ def handle_callback(call):
                             inline_message_id=call.inline_message_id,
                             media=telebot.types.InputMediaPhoto(
                                 media=image_url,
-                                caption=wish_text
+                                caption=f"✨ {wish_text} ✨"  # Добавляем блёстки в подпись
                             )
                         )
                         print(f"  ✅ Inline сообщение отредактировано")
                     except Exception as e:
                         print(f"  ⚠️ Не удалось отредактировать: {e}")
-                        # Если не получается отредактировать, отправляем новым сообщением
+                        # Если не получается отредактировать, отправляем в личку
                         bot.send_photo(
                             call.from_user.id,
                             image_url,
-                            caption=wish_text
+                            caption=f"✨ {wish_text} ✨"  # Добавляем блёстки в подпись
                         )
                 else:
                     # Это обычное сообщение в личке
                     bot.send_photo(
                         call.message.chat.id,
                         image_url,
-                        caption=wish_text,
+                        caption=f"✨ {wish_text} ✨",  # Добавляем блёстки в подпись
                         reply_to_message_id=call.message.message_id
                     )
                     print(f"  ✅ Пожелание отправлено в личку")
             else:
                 # Если не удалось создать картинку
-                wish_text_plain = f"✨ {wish_text}"
+                wish_text_plain = f"✨ {wish_text} ✨"
                 if call.inline_message_id:
                     bot.edit_message_text(
                         inline_message_id=call.inline_message_id,

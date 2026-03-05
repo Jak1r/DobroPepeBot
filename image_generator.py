@@ -38,8 +38,8 @@ EMOJIS_DIR = 'assets/emojis'
 
 # ⚡ ТОЛЬКО ЖИРНЫЕ ШРИФТЫ ⚡
 BOLD_FONTS = [
-    os.path.join(FONTS_DIR, 'RussoOne-Regular.ttf'),      # Самый жирный
-    os.path.join(FONTS_DIR, 'Charis-Bold.ttf'),           # Тоже жирный
+    os.path.join(FONTS_DIR, 'RussoOne-Regular.ttf'),
+    os.path.join(FONTS_DIR, 'Charis-Bold.ttf'),
     os.path.join(FONTS_DIR, 'Montserrat-VariableFont_wght.ttf'),
     os.path.join(FONTS_DIR, 'Nunito-VariableFont_wght.ttf'),
     os.path.join(FONTS_DIR, 'Jost-VariableFont_wght.ttf'),
@@ -73,7 +73,7 @@ def get_random_bold_font(size):
     try:
         font = ImageFont.truetype(selected, size)
         
-        # Пробуем установить жирное начертание если шрифт вариабельный
+        # Пробуем установить жирное начертание
         try:
             if 'Variable' in selected or 'Montserrat' in selected or 'Nunito' in selected or 'Jost' in selected:
                 font.set_variation_by_name('Bold')
@@ -103,7 +103,7 @@ def get_random_background():
     return None
 
 def create_gradient_background(width, height):
-    """Создает градиентный фон, если нет картинок"""
+    """Создает градиентный фон"""
     img = Image.new('RGB', (width, height), color='white')
     draw = ImageDraw.Draw(img)
     
@@ -149,6 +149,53 @@ def draw_text_with_outline(draw, text, font, x, y):
     # Основной текст
     draw.text((x, y), text, font=font, fill=(255, 255, 255))
 
+def add_sparkles_to_corners(draw, bg, emoji_png, width, height, text_block_x, text_block_y, text_width, text_height):
+    """Добавляет блёстки в углы картинки или по бокам текста"""
+    sparkle_size = 100
+    corner_margin = 30
+    
+    # Проверяем, не выходят ли боковые блёстки за границы
+    left_sparkle_x = text_block_x - sparkle_size - 40
+    right_sparkle_x = text_block_x + text_width + 40
+    
+    # Если блёстки выходят за границы или текст слишком широкий
+    if left_sparkle_x < corner_margin or right_sparkle_x > width - corner_margin:
+        print(f"  📐 Блёстки выходят за границы, перемещаю в углы")
+        
+        # Ресайзим блёстки (чуть меньше для углов)
+        corner_size = 90
+        emoji_corner = emoji_png.resize((corner_size, corner_size), Image.Resampling.LANCZOS)
+        
+        # 4 угла
+        corners = [
+            (corner_margin, corner_margin),  # верхний левый
+            (width - corner_size - corner_margin, corner_margin),  # верхний правый
+            (corner_margin, height - corner_size - corner_margin),  # нижний левый
+            (width - corner_size - corner_margin, height - corner_size - corner_margin)  # нижний правый
+        ]
+        
+        for x, y in corners:
+            bg.paste(emoji_corner, (int(x), int(y)), emoji_corner)
+        
+        print(f"  ✨ Добавлены 4 блёстки по углам")
+        return True
+    
+    # Если всё нормально, добавляем 2 блёстки по бокам
+    else:
+        # Ресайзим для боков
+        emoji_side = emoji_png.resize((sparkle_size, sparkle_size), Image.Resampling.LANCZOS)
+        
+        # Центрируем по вертикали относительно текста
+        sparkle_y = text_block_y + (text_height // 2) - (sparkle_size // 2)
+        
+        # Левая
+        bg.paste(emoji_side, (int(left_sparkle_x), int(sparkle_y)), emoji_side)
+        # Правая
+        bg.paste(emoji_side, (int(right_sparkle_x), int(sparkle_y)), emoji_side)
+        
+        print(f"  ✨ Добавлены 2 блёстки по бокам")
+        return False
+
 # Глобальная переменная для фона
 bg = None
 
@@ -189,7 +236,7 @@ def create_wish_image(text):
         # 4. Подготавливаем шрифты
         draw = ImageDraw.Draw(bg)
         
-        # Начинаем с большого размера шрифта (увеличил до 90)
+        # Начинаем с большого размера шрифта
         font_size = 90
         font = get_random_bold_font(font_size)
         
@@ -214,7 +261,7 @@ def create_wish_image(text):
         total_text_height = len(lines) * line_height
         start_y = (height - total_text_height) // 2
         
-        # Находим самую широкую строку для центрирования блока
+        # Находим самую широкую строку
         max_line_width = 0
         for line in lines:
             bbox = draw.textbbox((0, 0), line, font=font)
@@ -236,24 +283,14 @@ def create_wish_image(text):
             
             draw_text_with_outline(draw, line, font, x, y)
         
-        # 7. Добавляем две большие блёстки по бокам всего текста
+        # 7. Добавляем блёстки (умное позиционирование)
         if emoji_png:
-            # Размер блёсток (большие)
-            sparkle_size = 120
-            
-            # Левая блёстка
-            emoji_left = emoji_png.resize((sparkle_size, sparkle_size), Image.Resampling.LANCZOS)
-            left_x = text_block_x - sparkle_size - 40  # отступ слева
-            left_y = start_y + (total_text_height // 2) - (sparkle_size // 2)
-            bg.paste(emoji_left, (int(left_x), int(left_y)), emoji_left)
-            
-            # Правая блёстка
-            emoji_right = emoji_png.resize((sparkle_size, sparkle_size), Image.Resampling.LANCZOS)
-            right_x = text_block_x + max_line_width + 40  # отступ справа
-            right_y = start_y + (total_text_height // 2) - (sparkle_size // 2)
-            bg.paste(emoji_right, (int(right_x), int(right_y)), emoji_right)
-            
-            print(f"  ✨ Добавлены большие блёстки по бокам")
+            add_sparkles_to_corners(
+                draw, bg, emoji_png, 
+                width, height, 
+                text_block_x, start_y, 
+                max_line_width, total_text_height
+            )
         
         # 8. Добавляем декоративную рамку
         frame_color = (255, 255, 255, 30)
